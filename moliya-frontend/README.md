@@ -1,22 +1,21 @@
 # moliya-frontend
 
-Moliya daftari Telegram mini app'ining interfeysi. Vue 3 + TypeScript + TanStack Query + Pinia + Vite.
-Dizayn: to'q ko'k (navy) fon va "Liquid Glass" effekti. Bo'limlar: Bosh sahifa, Daromadlar, Chiqimlar, Reja va fakt, Yil, Qarzlar, Hisobot. To'lov sahifasi: `/obuna`.
+Moliya daftari Telegram mini app'ining interfeysi. Vue 3 + TypeScript + TanStack Query + Vite.
+Dizayn: navy fon, teal aksent. Bo'limlar: Bosh, Yozuvlar, Hisobot, Qarzlar, Oylik reja; "Yangi yozuv" oynasi; obuna oynasi. To'lov sahifasi: `/obuna`.
 
 ## Arxitektura
 
-Bog'liqlik faqat ichkariga yo'naladi: `presentation → application → domain`. `infrastructure` application'dagi portlarni amalga oshiradi, `app/container.ts` ularni ulaydi.
-
 ```
 src/
-  domain/          sof TypeScript: tiplar, katalog (48 modda), pul formatlari, hisob-kitob (oylik, yil, qarz, reja, kassa)
-  application/     portlar (LedgerGateway, BillingGateway, Platform), TanStack Query so'rovlari va mutatsiyalari,
-                   Pinia store (tanlangan oy, til, bildirishnoma), useMonth — tanlangan oy ko'rsatkichlari
-  infrastructure/  fetch mijozi (ApiError), Telegram WebApp adapteri, HTTP gateway'lar
-  presentation/    Vue komponentlari, sahifalar, i18n (uz/ru/en), uslublar
-  app/             App.vue, router, kompozitsiya ildizi (container.ts)
-tests/             domen qatlami testlari (vitest)
+  pages/        sahifalar (route)            features/   sahifa bo'laklari (home, records, report, debts, ...)
+  components/   umumiy UI                    composables/ use* — reaktiv mantiq
+  rest/         client, services (HTTP), queries (TanStack Query)
+  plugins/      router, vueQuery, telegram, i18n (uz/ru/en)
+  types/  constants/  utils/ (sof hisob-kitob)  styles/ (tokenlar)
+tests/          utils/ testlari (vitest)
 ```
+
+Qoidalar va bog'liqlik yo'nalishi: [AGENTS.md](AGENTS.md).
 
 Ma'lumot oqimi: ilova ochilganda bitta so'rov `GET ledger/state` — keyin barcha sahifalar shu keshdan hisoblanadi.
 Yozishlar optimistik: yozuv darhol ko'rinadi, server xato qaytarsa orqaga qaytariladi. Obuna tugaganda (402) to'lov oynasi chiqadi.

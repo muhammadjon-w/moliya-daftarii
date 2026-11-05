@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { compact, formatInput, parseMoney, reformatTyping } from "@/domain/money"
-import { asciiJson } from "@/infrastructure/http/client"
+import { asciiJson } from "@/rest/client"
+import { compact, daysBetween, formatInput, parseMoney, reformatTyping, shortDate } from "@/utils/money"
 
 describe("pul formatlari", () => {
   it("10 000 000 ko'rinishida yozadi va o'qiydi", () => {
@@ -22,6 +22,11 @@ describe("pul formatlari", () => {
     expect(compact(14_250_000, uz)).toBe("14,3 mln")
     expect(compact(-2_500_000_000, uz)).toBe("−2,5 mlrd")
     expect(compact(950_000, uz)).toBe("950\u00a0000")
+  })
+  it("sanalar", () => {
+    expect(shortDate("2026-11-05")).toBe("05.11")
+    expect(daysBetween("2026-11-05", "2026-11-15")).toBe(10)
+    expect(daysBetween("2026-11-05", "2026-11-01")).toBe(-4)
   })
   it("sarlavha uchun JSON faqat ASCII", () => {
     const s = asciiJson({ first_name: "Мухаммад", id: 1 })

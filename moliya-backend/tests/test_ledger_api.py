@@ -21,6 +21,7 @@ def test_state_creates_account_with_trial(client_for):
     assert r.status_code == 200
     body = r.json()
     assert body["access"]["state"] == "trial" and body["access"]["daysLeft"] == 30
+    assert body["account"]["id"] == 1001 and body["account"]["firstName"] == "Ali"
     assert body["transactions"] == [] and body["settings"] == {"usdRate": 12000.0, "openingBalance": 0.0}
 
 

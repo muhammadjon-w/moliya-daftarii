@@ -54,6 +54,21 @@ def test_debt_summary_and_payment():
     assert paid.summary(date(2026, 11, 5)).status == "paid"
 
 
+def test_debt_installment_moves_schedule():
+    d = Debt(account_id=1, lender="Bank", principal="12000000", months=12, pay_date=date(2027, 1, 31))
+    # to'liq oylik to'lov: qolgan oylar −1, sana +1 oy (oy oxiri to'g'ri), oylik to'lov o'zgarmaydi
+    after = d.with_payment("1000000")
+    assert (after.months, after.pay_date) == (11, date(2027, 2, 28))
+    assert after.summary(date(2027, 1, 1)).monthly == Decimal("1000000.00")
+    # qisman to'lov: jadval o'zgarmaydi
+    partial = d.with_payment("400000")
+    assert (partial.months, partial.pay_date) == (12, date(2027, 1, 31))
+    # to'liq yopilsa: jadval o'zgarmaydi, holat "paid"
+    closed = d.with_payment("12000000")
+    assert (closed.months, closed.pay_date) == (12, date(2027, 1, 31))
+    assert closed.summary(date(2027, 1, 1)).status == "paid"
+
+
 def test_plan_and_settings_validation():
     p = MonthPlan(month="2026-11", values={"inc:salary": "20000000", "exp:food": 0})
     assert p.values == {"inc:salary": Decimal("20000000.00")}

@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from moliya.accounts.application.use_cases import serialize_access
+from moliya.accounts.interfaces.views import serialize_account
 from moliya.ledger.container import export_ledger, ledger_service
 from moliya.ledger.interfaces.serializers import (
     DebtIn,
@@ -30,6 +31,7 @@ class StateView(APIView):
     def get(self, request):
         st = ledger_service().state(request.user.account)
         return Response({
+            "account": serialize_account(request.user.account),
             "access": serialize_access(st["access"]),
             "transactions": [tx_out(t) for t in st["transactions"]],
             "debts": [debt_out(d) for d in st["debts"]],

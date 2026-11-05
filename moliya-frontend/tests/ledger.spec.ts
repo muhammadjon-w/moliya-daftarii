@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest"
+import type { Debt, Transaction } from "@/types/ledger"
 import {
-  balanceBefore, cashReport, dailyCumulative, debtBuckets, debtCalc, groupOf, planOverview, planSections, totals, yearRows,
-} from "@/domain/ledger"
-import type { Debt, Transaction } from "@/domain/types"
+  balanceBefore, changePct, debtCalc, debtSummary, expenseShares, groupOf, percent, plannedRows, planRows, planStatus,
+  sortNewestFirst, splitDebts, topItems, totals,
+} from "@/utils/ledger"
 
 let n = 0
 const tx = (p: Partial<Transaction>): Transaction => ({
@@ -13,112 +14,100 @@ const debt = (p: Partial<Debt>): Debt => ({
   id: "d" + ++n, lender: "Bank", principal: 0, paid: 0, months: 0, status: "", date: null, payDate: null, deadline: null, note: "", createdAt: null, ...p,
 })
 const RATE = 12_000
+const income = (p: Partial<Transaction>) => tx({ type: "income", group: "inc", item: "salary", category: "salary", ...p })
 
 describe("totals", () => {
   it("guruhlar bo'yicha yig'adi va dollarni so'mga aylantiradi", () => {
-    const list = [
-      tx({ type: "income", group: "inc", item: "salary", category: "salary", amount: 10_000_000 }),
-      tx({ type: "income", group: "inc", amount: 100, currency: "USD" }),
-      tx({ group: "pay", amount: 2_000_000 }),
-      tx({ group: "exp", amount: 500_000 }),
-      tx({ group: "debt", amount: 1_000_000 }),
-    ]
-    const t = totals(list, RATE)
+    const t = totals(
+      [income({ amount: 10_000_000 }), income({ amount: 100, currency: "USD" }), tx({ group: "pay", amount: 2_000_000 }), tx({ amount: 500_000 }), tx({ group: "debt", amount: 1_000_000 })],
+      RATE,
+    )
     expect(t.inc).toBe(11_200_000)
     expect(t.out).toBe(3_500_000)
     expect(t.net).toBe(7_700_000)
-    expect(t.incUsd).toBe(100)
   })
 
   it("noma'lum guruh chiqim sifatida hisoblanadi", () => {
     expect(groupOf({ type: "expense", group: "inc" })).toBe("exp")
     expect(groupOf({ type: "income", group: "pay" })).toBe("inc")
   })
-})
 
-describe("balanceBefore va yearRows", () => {
-  const all = [
-    tx({ type: "income", group: "inc", amount: 5_000_000, date: "2026-01-10" }),
-    tx({ amount: 1_000_000, date: "2026-01-20" }),
-    tx({ amount: 500_000, date: "2026-02-01" }),
-    tx({ type: "income", group: "inc", amount: 1_000_000, date: "2025-12-31" }),
-  ]
   it("oy boshidagi qoldiqqa boshlang'ich summa va oldingi oylar kiradi", () => {
+    const all = [income({ amount: 5_000_000, date: "2026-01-10" }), tx({ amount: 1_000_000, date: "2026-01-20" }), income({ amount: 1_000_000, date: "2025-12-31" })]
     expect(balanceBefore(all, 2026, 0, RATE, 200_000)).toBe(1_200_000)
     expect(balanceBefore(all, 2026, 1, RATE, 200_000)).toBe(5_200_000)
   })
-  it("yil jadvali oy oxiridagi qoldiqni yig'ib boradi", () => {
-    const rows = yearRows(all, 2026, RATE, 0)
-    expect(rows).toHaveLength(12)
-    expect(rows[0].end).toBe(5_000_000)
-    expect(rows[1].end).toBe(4_500_000)
-    expect(rows[11].end).toBe(4_500_000)
+
+  it("foizlar", () => {
+    expect(percent(10_250_000, 28_400_000)).toBe(36)
+    expect(percent(1, 0)).toBeNull()
+    expect(changePct(28_400_000, 14_000_000)).toBe(103)
+    expect(changePct(5, 0)).toBeNull()
+  })
+
+  it("yangi yozuvlar birinchi", () => {
+    const a = tx({ date: "2026-11-03" })
+    const b = tx({ date: "2026-11-05", createdAt: "2026-11-05T08:00:00Z" })
+    const c = tx({ date: "2026-11-05", createdAt: "2026-11-05T09:00:00Z" })
+    expect(sortNewestFirst([a, b, c]).map((x) => x.id)).toEqual([c.id, b.id, a.id])
   })
 })
 
-describe("dailyCumulative", () => {
-  it("o'tgan oyda oxirgi kungacha yig'iladi", () => {
-    const arr = dailyCumulative([tx({ amount: 100, date: "2026-02-03" }), tx({ amount: 50, date: "2026-02-10" })], 2026, 1, RATE, () => true, new Date(2026, 5, 1))
-    expect(arr).toHaveLength(28)
-    expect(arr[1]).toBe(0)
-    expect(arr[2]).toBe(100)
-    expect(arr[27]).toBe(150)
+describe("hisobot", () => {
+  it("chiqim ulushlari yig'indisi 100%", () => {
+    const s = expenseShares(totals([tx({ group: "pay", amount: 4_500_000 }), tx({ amount: 3_500_000 }), tx({ group: "debt", amount: 2_000_000 }), tx({ amount: 250_000 })], RATE))
+    expect(s.map((x) => x.group)).toEqual(["pay", "exp", "debt"])
+    expect(s.reduce((a, x) => a + x.pct, 0)).toBe(100)
+    expect(expenseShares(totals([], RATE))).toEqual([])
   })
-})
 
-describe("qarzlar", () => {
-  it("qoldiq, oylik to'lov va holatni hisoblaydi", () => {
-    const c = debtCalc({ principal: 12_000_000, paid: 2_000_000, months: 10 }, "2026-11-05")
-    expect(c.remaining).toBe(10_000_000)
-    expect(c.monthly).toBe(1_000_000)
-    expect(c.status).toBe("active")
-    expect(debtCalc({ principal: 100, paid: 100, months: 0 }, "2026-11-05").status).toBe("paid")
-    expect(debtCalc({ principal: 100, paid: 0, months: 0, deadline: "2026-01-01" }, "2026-11-05").status).toBe("overdue")
-  })
-  it("muddatlar bo'yicha guruhlaydi", () => {
-    const b = debtBuckets(
-      [
-        debt({ principal: 100, payDate: "2026-11-01" }),
-        debt({ principal: 200, payDate: "2026-11-20" }),
-        debt({ principal: 300, deadline: "2026-12-25" }),
-        debt({ principal: 400 }),
-        debt({ principal: 500, paid: 500 }),
-      ],
-      "2026-11-05",
-    )
-    expect(b).toEqual({ overdue: 100, d30: 200, d60: 300, later: 400, total: 1000 })
+  it("eng ko'p sarflangan moddalar", () => {
+    const top = topItems([tx({ item: "rent", category: "housing", group: "pay", amount: 4_500_000 }), tx({ item: "meals", amount: 1_000_000 }), tx({ item: "meals", amount: 1_600_000 }), income({ amount: 9e9 })], RATE, false)
+    expect(top.map((x) => [x.item, x.value])).toEqual([["rent", 4_500_000], ["meals", 2_600_000]])
   })
 })
 
 describe("reja", () => {
-  const list = [tx({ group: "exp", category: "food", amount: 900_000 }), tx({ type: "income", group: "inc", category: "salary", amount: 8_000_000 })]
-  const plan = { "exp:food": 600_000, "inc:salary": 10_000_000 }
-  it("bo'limlar fakt va farqni beradi", () => {
-    const s = planSections(list, plan, RATE)
-    const inc = s.find((x) => x.group === "inc")!
-    const exp = s.find((x) => x.group === "exp")!
-    expect(inc.diff).toBe(-2_000_000)
-    expect(exp.rows.find((r) => r.category === "food")!.diff).toBe(-300_000)
+  const list = [tx({ category: "food", amount: 2_600_000 }), income({ amount: 14_000_000 })]
+  const plan = { "exp:food": 2_000_000, "inc:salary": 15_000_000, "exp:transport": 500_000 }
+
+  it("toifa bo'yicha reja va fakt", () => {
+    const food = planRows(list, plan, RATE, "exp").find((r) => r.category === "food")!
+    expect([food.plan, food.fact]).toEqual([2_000_000, 2_600_000])
   })
-  it("oshib ketgan toifalarni topadi", () => {
-    expect(planOverview(list, plan, RATE)).toEqual({ income: 10_000_000, outflow: 600_000, overruns: [{ category: "food", over: 300_000 }] })
+
+  it("holat: oshdi / qoldi / foiz", () => {
+    expect(planStatus({ group: "exp", plan: 2_000_000, fact: 2_600_000 })).toEqual({ kind: "over", amount: 600_000 })
+    expect(planStatus({ group: "exp", plan: 500_000, fact: 0 })).toEqual({ kind: "left", amount: 500_000 })
+    expect(planStatus({ group: "inc", plan: 15_000_000, fact: 14_000_000 })).toEqual({ kind: "progress", pct: 93 })
+    expect(planStatus({ group: "inc", plan: 1, fact: 2 })).toEqual({ kind: "done" })
+  })
+
+  it("rejali qatorlar: oshib ketganlar birinchi", () => {
+    expect(plannedRows(list, plan, RATE).map((r) => r.category)).toEqual(["food", "salary", "transport"])
   })
 })
 
-describe("kassa", () => {
-  it("usullar bo'yicha boshlang'ich, kirim, chiqim va qoldiq", () => {
-    const r = cashReport(
-      [
-        tx({ type: "income", group: "inc", amount: 1000, method: "card", date: "2026-10-01" }),
-        tx({ type: "income", group: "inc", amount: 500, method: "card", date: "2026-11-02" }),
-        tx({ amount: 200, method: "card", date: "2026-11-03" }),
-        tx({ amount: 10, currency: "USD", date: "2026-11-03" }),
-      ],
-      2026,
-      10,
-    )
-    expect(r.byMethod.find((x) => x.method === "card")!.row).toEqual({ start: 1000, inflow: 500, outflow: 200, end: 1300 })
-    expect(r.total.end).toBe(1300)
-    expect(r.usd).toEqual({ start: 0, inflow: 0, outflow: 10, end: -10 })
+describe("qarzlar", () => {
+  it("qoldiq, oylik to'lov va holat", () => {
+    const c = debtCalc({ principal: 24_000_000, paid: 6_000_000, months: 12 }, "2026-11-05")
+    expect([c.remaining, c.monthly, c.status, c.paidPct]).toEqual([18_000_000, 1_500_000, "active", 25])
+    expect(debtCalc({ principal: 100, paid: 100, months: 0 }, "2026-11-05").status).toBe("paid")
+    expect(debtCalc({ principal: 100, paid: 0, months: 0, deadline: "2026-01-01" }, "2026-11-05").status).toBe("overdue")
+  })
+
+  it("jami va faol qarzlar", () => {
+    const s = debtSummary([debt({ principal: 24_000_000, paid: 6_000_000, months: 12 }), debt({ principal: 5_000_000, paid: 1_000_000, months: 4 }), debt({ principal: 10, paid: 10 })], "2026-11-05")
+    expect(s).toEqual({ principal: 29_000_010, paid: 7_000_010, remaining: 22_000_000, monthly: 2_500_000, openCount: 2 })
+  })
+
+  it("yaqin to'lov bo'yicha tartib, yopilganlari alohida", () => {
+    const later = debt({ principal: 100, payDate: "2026-12-01" })
+    const soon = debt({ principal: 100, payDate: "2026-11-15" })
+    const noDate = debt({ principal: 100 })
+    const closed = debt({ principal: 100, paid: 100 })
+    const { open, closed: done } = splitDebts([later, noDate, closed, soon], "2026-11-05")
+    expect(open.map((v) => [v.debt.id, v.daysLeft])).toEqual([[soon.id, 10], [later.id, 26], [noDate.id, null]])
+    expect(done.map((v) => v.debt.id)).toEqual([closed.id])
   })
 })

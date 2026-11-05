@@ -8,6 +8,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from moliya.ledger.domain.catalog import ITEMS
+from moliya.shared.domain.clock import add_months
 from moliya.shared.domain.errors import ValidationFailed
 
 TX_TYPES = ("income", "expense")
@@ -127,10 +128,22 @@ class Debt:
         return DebtSummary(self.principal, self.paid, remaining, self.months, monthly, status)
 
     def with_payment(self, amount) -> "Debt":
+        """To'lovni qo'shadi.
+
+        `months` — qolgan oylar soni. To'liq oylik to'lov qilinsa (qarz hali yopilmagan bo'lsa)
+        qolgan oylar bittaga kamayadi va keyingi to'lov sanasi bir oyga suriladi. Qisman to'lovda — o'zgarmaydi.
+        """
         amount = _money(amount, "amount")
+        monthly_before = (max(self.principal - self.paid, Decimal("0")) / self.months) if self.months else Decimal("0")
         new = replace(self, paid=self.paid + amount)
         if new.status != "paid" and new.principal - new.paid <= 0:
             new.status = ""
+        full_installment = not self.months or amount + Decimal("1") >= monthly_before
+        if new.principal - new.paid > 0 and full_installment:
+            if new.months:
+                new.months -= 1
+            if new.pay_date:
+                new.pay_date = add_months(new.pay_date, 1)
         return new
 
 
