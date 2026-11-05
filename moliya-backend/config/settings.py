@@ -1,4 +1,5 @@
 """Django sozlamalari. Barcha maxfiy va muhitga bog'liq qiymatlar .env faylidan o'qiladi."""
+import re
 from pathlib import Path
 
 import environ
@@ -102,7 +103,8 @@ REST_FRAMEWORK = {
 TELEGRAM = {
     "BOT_TOKEN": env("BOT_TOKEN", default=""),
     "BOT_USERNAME": env("BOT_USERNAME", default=""),
-    "WEBHOOK_SECRET": env("BOT_WEBHOOK_SECRET", default=""),
+    # Telegram secret_token faqat A-Z a-z 0-9 _ - qabul qiladi (Render generateValue'da + / = bo'ladi).
+    "WEBHOOK_SECRET": re.sub(r"[^A-Za-z0-9_-]", "", env("BOT_WEBHOOK_SECRET", default=""))[:256],
     "MINI_APP_URL": env("MINI_APP_URL", default=f"{FRONTEND_ORIGIN}/" if FRONTEND_ORIGIN else ""),
     "SITE_URL": env("SITE_URL", default=FRONTEND_ORIGIN),
     "INIT_DATA_MAX_AGE": env("INIT_DATA_MAX_AGE"),
