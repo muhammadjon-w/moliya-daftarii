@@ -38,7 +38,7 @@ services:
           name: moliya-app
           property: host
       - key: BOT_USERNAME
-        value: moliyadaftaribot
+        value: moliyadaftari_bot
       - key: BOT_TOKEN
         sync: false # Render so'raydi: @BotFather bergan token
       - key: TRIAL_DAYS
@@ -64,4 +64,4 @@ services:
           name: moliya-api
           property: host
       - key: VITE_BOT_USERNAME
-        value: moliyadaftaribot
+        value: moliyadaftari_bot
